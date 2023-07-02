@@ -34,7 +34,7 @@ class IMU_Simulated:
             int(dataRow["ay"])/self.accScale, int(dataRow["az"])/self.accScale,\
             int(dataRow["gx"])/self.gyroScale*math.pi/180,\
             int(dataRow["gy"])/self.gyroScale*math.pi/180,\
-            int(dataRow["gz"])/self.gyroScale*math.pi/180, end
+            int(dataRow["gz"])/self.gyroScale*math.pi/180, dataRow["fs"],end
 
 
 
