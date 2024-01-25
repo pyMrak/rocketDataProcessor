@@ -31,7 +31,7 @@ mb = -32761
 mc = -11786
 md = 2719
 
-oversampling = BMP085_ULTRAHIGHRES #BMP085_STANDARD
+#oversampling = BMP085_ULTRAHIGHRES #BMP085_STANDARD
 
 def computeB5(UT, calibParameters):
     if len(calibParameters):
@@ -41,7 +41,7 @@ def computeB5(UT, calibParameters):
     X2 = int((mc << 11) / (X1 + md))
     return X1 + X2
 
-def getPressure(Pr, Tr, calibParameters):
+def getPressure(Pr, Tr, oversampling, calibParameters):
 
     if len(calibParameters):
         ac1 = calibParameters["ac1"]
