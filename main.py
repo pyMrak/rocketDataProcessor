@@ -36,8 +36,8 @@ def main(file, pressure_overs):
     while dataAvailable:
         t, P, T, ax, ay, az, p, q, r, fs, end = imu.getNewData()
         dataAvailable = not end
-        t, P, T, ax, ay, az, p, q, r = dp.filter_data(t, P, T, ax, ay, az, p, q, r)
-        t, h, ax, ay, az, p, q, r = dp.process_raw_data(t, P, T, ax, ay, az, p, q, r)
+        t, h, ax, ay, az, p, q, r = dp.filter_data(t, P, T, ax, ay, az, p, q, r)
+        t, h, ax, ay, az, p, q, r = dp.process_raw_data(t, h, ax, ay, az, p, q, r)
         dt = t - t_prev
         t_prev = t
         phiAcc, thetaAcc = dp.getAccAngles(ax, ay, az)
@@ -54,11 +54,13 @@ def main(file, pressure_overs):
 
 
 if __name__ == "__main__":
-    data = main("F:/LOG00227.TXT", BMP085.BMP085_STANDARD) #"7th_flight.TXT"
+    data = main("flights/LOG00226.TXT", BMP085.BMP085_STANDARD) #"7th_flight.TXT"
     print(data.dataFrame["t_p"])
     # plt.plot(data.dataFrame["t_p"], data.dataFrame["p_r"])
     plt.plot(data.dataFrame["t_p"], data.dataFrame["h_p"])
+
     plt.plot(data.dataFrame["t_p"], data.dataFrame["h_a"])
+    # plt.plot(data.dataFrame["t_p"], data.dataFrame["a_h"])
     plt.plot(data.dataFrame["t_p"], data.dataFrame["h_f"])
     plt.grid()
     # plt.xlim((120, 170))

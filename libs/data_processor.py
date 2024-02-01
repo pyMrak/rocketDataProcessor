@@ -19,24 +19,25 @@ class Data_Processor(object):
         self.gyroFiltered = [0, 0, 0]
         self.gyro_filter_N = gyro_filter_N
 
-        self.p = 0
-        self.T = 0
-        self.p_k = 0
+        self.h = -1
+        # self.T = 0
+        self.h_k = 0
+        self.t_h = 0
         self.t_p = 0
-        self.T_k = 0
-        self.t_T = 0
+        # self.T_k = 0
+        # self.t_T = 0
         self.v_a = 0
         self.h_a = 0
         self.dt = 0
 
         self.current_idx = -1
-        data = zeros((length-1, 36))
+        data = zeros((length-1, 35))
         self.dataFrame = DataFrame(data,
                                    columns=["t_r", "p_r", "T_r", "ax_r", "ay_r", "az_r", "gx_r", "gy_r", "gz_r",
-                                            "t_f", "p_f", "T_f", "ax_f", "ay_f", "az_f", "gx_f", "gy_f", "gz_f",
+                                            "t_f", "ax_f", "ay_f", "az_f", "gx_f", "gy_f", "gz_f",
                                             "t_p", "p_p", "ax_p", "ay_p", "az_p", "gx_p", "gy_p", "gz_p",
                                             "phi_a", "theta_a", "phi_g", "theta_g", "phi_f", "theta_f",
-                                            "a_h", "h_p", "h_a", "h_f"],
+                                            "a_h", "h_p", "h_a", "h_f", "h_r"],
                                    )
 
     def filter_data(self, t, p, T, ax, ay, az, gy, gx, gz):
@@ -58,35 +59,50 @@ class Data_Processor(object):
         gy = self.gyroFiltered[1]
         gz = self.gyroFiltered[2]
 
-        if -1 != p:
-            if self.p == 0:
-                self.p = p
-            if self.t_p == 0:
-                self.t_p = t - 1
-            if t == self.t_p:
+        if p > 0:
+            pr = BMP085.getPressure(p, T, self.press_range, self.p_calib_param)
+            h = 44330 * (1.0 - pow(pr / self.p0, 0.190295))
+        else:
+            h = -1
+        self.save_h_raw(h)
+
+        if self.t_h == 0:
+            self.t_h = t - 1
+        if self.t_p == 0:
+            self.t_p = t - 1
+        if t == self.t_p:
+            t += 0.5
+        self.dt = t - self.t_p
+        self.t_p = t
+        if -1 != h:
+            if t == self.t_h:
                 t += 0.5
-            self.dt = t - self.t_p
-
+            dt = t - self.t_h
+            if self.h == -1:
+                self.h = h
             if self.dt != 0:
-                self.p_k = (p - self.p) / self.dt
-            self.p = p
-            self.t_p = t
+                self.h_k = (h - self.h) / dt
+            self.h = h
+            self.t_h = t
         else:
-            p = int(self.p + self.p_k*(t-self.t_p))
-        if 32767 != T:
-            # dt = t - self.t_T
-            if self.dt != 0:
-                self.T_k = (T - self.T) / self.dt
-            self.T = T
-            self.t_T = t
-            T = self.T
-        else:
-            T = int(self.T + self.T_k*(t-self.t_T))
-        self.save_filtered(t, p, T, ax, ay, az, gy, gx, gz)
-        return t, p, T, ax, ay, az, gy, gx, gz
+            h = self.h + self.h_k*(t-self.t_h)
+
+        # if 32767 != T:
+        #     # dt = t - self.t_T
+        #     if self.T == 0:
+        #         self.T = T
+        #     if self.dt != 0:
+        #         self.T_k = (T - self.T) / self.dt
+        #     self.T = T
+        #     self.t_T = t
+        #     T = self.T
+        # else:
+        #     T = int(self.T + self.T_k*(t-self.t_T))
+        self.save_filtered(t, h, ax, ay, az, gy, gx, gz)
+        return t, h, ax, ay, az, gy, gx, gz
 
 
-    def process_raw_data(self, t, p, T, ax, ay, az, gy, gx, gz):
+    def process_raw_data(self, t, h, ax, ay, az, gy, gx, gz):
         t = t / self.t_scale
         ax = ax / self.acc_scale
         ay = ay / self.acc_scale
@@ -94,9 +110,7 @@ class Data_Processor(object):
         gx = gx / self.gyro_scale * pi / 180
         gy = gy / self.gyro_scale * pi / 180
         gz = gz / self.gyro_scale * pi / 180
-        p = BMP085.getPressure(p, T, self.press_range, self.p_calib_param)
-        h = 44330 * (1.0 - pow(p / self.p0, 0.190295))
-        self.save_processed(t, p, h, ax, ay, az, gy, gx, gz)
+        self.save_processed(t, 0, h, ax, ay, az, gy, gx, gz)  # TODO add processed p
         return t, h, ax, ay, az, gx, gy, gz
 
     def post_filter_data(self, t, h, ax, ay, az, gy, gx, gz):
@@ -123,63 +137,67 @@ class Data_Processor(object):
         accZ = (az * cos(phi) * cos(theta) + ay * sin(phi) + ax * sin(theta) + 1) * 9.81
         if self.h_a == 0:
             self.h_a = self.dataFrame["h_p"][self.current_idx]
-        self.v_a = self.v_a + self.dt/1000 * accZ
+        if self.dataFrame["t_r"][self.current_idx] > 120903:
+            b = 1
+        self.v_a -= self.dt/1000 * accZ
         self.h_a += (self.dt/1000) * self.v_a - accZ * (self.dt/1000) ** 2 / 2
         self.save_accZ(accZ)
         self.save_h_acc(self.h_a)
         return accZ
 
     def save_raw(self, t, p, T, ax, ay, az, gy, gx, gz):
-        self.dataFrame["t_r"][self.current_idx] = t
-        self.dataFrame["p_r"][self.current_idx] = p
-        self.dataFrame["T_r"][self.current_idx] = T
-        self.dataFrame["ax_r"][self.current_idx] = ax
-        self.dataFrame["ay_r"][self.current_idx] = ay
-        self.dataFrame["az_r"][self.current_idx] = az
-        self.dataFrame["gx_r"][self.current_idx] = gx
-        self.dataFrame["gy_r"][self.current_idx] = gy
-        self.dataFrame["gz_r"][self.current_idx] = gz
+        self.dataFrame.loc[self.current_idx, "t_r"] = t
+        self.dataFrame.loc[self.current_idx, "p_r"] = p
+        self.dataFrame.loc[self.current_idx, "T_r"] = T
+        self.dataFrame.loc[self.current_idx, "ax_r"] = ax
+        self.dataFrame.loc[self.current_idx, "ay_r"] = ay
+        self.dataFrame.loc[self.current_idx, "az_r"] = az
+        self.dataFrame.loc[self.current_idx, "gx_r"] = gx
+        self.dataFrame.loc[self.current_idx, "gy_r"] = gy
+        self.dataFrame.loc[self.current_idx, "gz_r"] = gz
 
-    def save_filtered(self, t, p, T, ax, ay, az, gy, gx, gz):
-        self.dataFrame["t_f"][self.current_idx] = t
-        self.dataFrame["p_f"][self.current_idx] = p
-        self.dataFrame["T_f"][self.current_idx] = T
-        self.dataFrame["ax_f"][self.current_idx] = ax
-        self.dataFrame["ay_f"][self.current_idx] = ay
-        self.dataFrame["az_f"][self.current_idx] = az
-        self.dataFrame["gx_f"][self.current_idx] = gx
-        self.dataFrame["gy_f"][self.current_idx] = gy
-        self.dataFrame["gz_f"][self.current_idx] = gz
+    def save_filtered(self, t, h, ax, ay, az, gy, gx, gz):
+        self.dataFrame.loc[self.current_idx, "t_f"] = t
+        self.dataFrame.loc[self.current_idx, "h_f"] = h
+        self.dataFrame.loc[self.current_idx, "ax_f"] = ax
+        self.dataFrame.loc[self.current_idx, "ay_f"] = ay
+        self.dataFrame.loc[self.current_idx, "az_f"] = az
+        self.dataFrame.loc[self.current_idx, "gx_f"] = gx
+        self.dataFrame.loc[self.current_idx, "gy_f"] = gy
+        self.dataFrame.loc[self.current_idx, "gz_f"] = gz
 
     def save_processed(self, t, p, h, ax, ay, az, gy, gx, gz):
-        self.dataFrame["t_p"][self.current_idx] = t
-        self.dataFrame["p_p"][self.current_idx] = p
-        self.dataFrame["h_p"][self.current_idx] = h
-        self.dataFrame["ax_p"][self.current_idx] = ax
-        self.dataFrame["ay_p"][self.current_idx] = ay
-        self.dataFrame["az_p"][self.current_idx] = az
-        self.dataFrame["gx_p"][self.current_idx] = gx
-        self.dataFrame["gy_p"][self.current_idx] = gy
-        self.dataFrame["gz_p"][self.current_idx] = gz
+        self.dataFrame.loc[self.current_idx, "t_p"] = t
+        self.dataFrame.loc[self.current_idx, "p_p"] = p
+        self.dataFrame.loc[self.current_idx, "h_p"] = h
+        self.dataFrame.loc[self.current_idx, "ax_p"] = ax
+        self.dataFrame.loc[self.current_idx, "ay_p"] = ay
+        self.dataFrame.loc[self.current_idx, "az_p"] = az
+        self.dataFrame.loc[self.current_idx, "gx_p"] = gx
+        self.dataFrame.loc[self.current_idx, "gy_p"] = gy
+        self.dataFrame.loc[self.current_idx, "gz_p"] = gz
 
     def save_accAngles(self, phi, theta):
-        self.dataFrame["phi_a"][self.current_idx] = phi
-        self.dataFrame["theta_a"][self.current_idx] = theta
+        self.dataFrame.loc[self.current_idx, "phi_a"] = phi
+        self.dataFrame.loc[self.current_idx, "theta_a"] = theta
 
     def save_gyroAngles(self, phi, theta):
-        self.dataFrame["phi_g"][self.current_idx] = phi
-        self.dataFrame["theta_g"][self.current_idx] = theta
+        self.dataFrame.loc[self.current_idx, "phi_g"] = phi
+        self.dataFrame.loc[self.current_idx, "theta_g"] = theta
 
     def save_filtAngles(self, phi, theta):
-        self.dataFrame["phi_f"][self.current_idx] = phi
-        self.dataFrame["theta_f"][self.current_idx] = theta
+        self.dataFrame.loc[self.current_idx, "phi_f"] = phi
+        self.dataFrame.loc[self.current_idx, "theta_f"] = theta
 
     def save_accZ(self, a):
-        self.dataFrame["a_h"][self.current_idx] = a
+        self.dataFrame.loc[self.current_idx, "a_h"] = a
 
     def save_h_acc(self, h):
-        self.dataFrame["h_a"][self.current_idx] = h
+        self.dataFrame.loc[self.current_idx, "h_a"] = h
 
     def save_h_filtered(self, h):
-        self.dataFrame["h_f"][self.current_idx] = h
+        self.dataFrame.loc[self.current_idx, "h_f"] = h
+
+    def save_h_raw(self, h):
+        self.dataFrame.loc[self.current_idx, "h_r"] = h
 
