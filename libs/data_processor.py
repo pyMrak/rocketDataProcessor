@@ -31,13 +31,13 @@ class Data_Processor(object):
         self.dt = 0
 
         self.current_idx = -1
-        data = zeros((length-1, 35))
+        data = zeros((length-1, 37))
         self.dataFrame = DataFrame(data,
                                    columns=["t_r", "p_r", "T_r", "ax_r", "ay_r", "az_r", "gx_r", "gy_r", "gz_r",
                                             "t_f", "ax_f", "ay_f", "az_f", "gx_f", "gy_f", "gz_f",
                                             "t_p", "p_p", "ax_p", "ay_p", "az_p", "gx_p", "gy_p", "gz_p",
                                             "phi_a", "theta_a", "phi_g", "theta_g", "phi_f", "theta_f",
-                                            "a_h", "h_p", "h_a", "h_f", "h_r"],
+                                            "ah_p", "ah_f", "vh_f", "h_p", "h_a", "h_f", "h_r"],
                                    )
 
     def filter_data(self, t, p, T, ax, ay, az, gy, gx, gz):
@@ -134,13 +134,11 @@ class Data_Processor(object):
         return phi, theta
 
     def getAccZ(self, ax, ay, az, phi, theta):
-        accZ = (az * cos(phi) * cos(theta) + ay * sin(phi) + ax * sin(theta) + 1) * 9.81
+        accZ = (az * cos(phi) * cos(theta) + ay * sin(phi) + ax * sin(theta) + 1) * -9.81
         if self.h_a == 0:
             self.h_a = self.dataFrame["h_p"][self.current_idx]
-        if self.dataFrame["t_r"][self.current_idx] > 120903:
-            b = 1
-        self.v_a -= self.dt/1000 * accZ
-        self.h_a += (self.dt/1000) * self.v_a - accZ * (self.dt/1000) ** 2 / 2
+        self.v_a += self.dt/1000 * accZ
+        self.h_a += (self.dt/1000) * self.v_a + accZ * (self.dt/1000) ** 2 / 2
         self.save_accZ(accZ)
         self.save_h_acc(self.h_a)
         return accZ
@@ -190,13 +188,15 @@ class Data_Processor(object):
         self.dataFrame.loc[self.current_idx, "theta_f"] = theta
 
     def save_accZ(self, a):
-        self.dataFrame.loc[self.current_idx, "a_h"] = a
+        self.dataFrame.loc[self.current_idx, "ah_p"] = a
 
     def save_h_acc(self, h):
         self.dataFrame.loc[self.current_idx, "h_a"] = h
 
-    def save_h_filtered(self, h):
+    def save_h_filtered(self, h, v, a):
         self.dataFrame.loc[self.current_idx, "h_f"] = h
+        self.dataFrame.loc[self.current_idx, "vh_f"] = v
+        self.dataFrame.loc[self.current_idx, "ah_f"] = a
 
     def save_h_raw(self, h):
         self.dataFrame.loc[self.current_idx, "h_r"] = h

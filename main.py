@@ -15,7 +15,7 @@ cd = 3.5
 DC = 0.5*rho*cd*Af
 dt = 0.01
 std_a = 0.0374
-std_h = 0.3281 #STD 0.2722 #ULTRAHIGH
+std_h = 0.2722 #ULTRAHIGH   0.3281 #STD
 std = 0.04
 var = std * std
 
@@ -46,22 +46,28 @@ def main(file, pressure_overs):
         acc_Z = dp.getAccZ(ax, ay, az, phi, theta)
         kf_z.F = np.array([[1, dt, dt * dt * 0.5], [0, 1, dt], [0, 0, 1]])
         kf_z.Q = Q_discrete_white_noise(dim=3, dt=dt, var=var)
+        if kf_z.x[0] == 0:
+            kf_z.x[0] = h
         kf_z.predict()
-        kf_z.update(np.array([[h], [-acc_Z]]))
-        dp.save_h_filtered(kf_z.x[0])
+        kf_z.update(np.array([[h], [acc_Z]]))
+        dp.save_h_filtered(kf_z.x[0], kf_z.x[1], kf_z.x[2])
     return dp
 
 
 
 if __name__ == "__main__":
-    data = main("flights/LOG00226.TXT", BMP085.BMP085_STANDARD) #"7th_flight.TXT"
-    print(data.dataFrame["t_p"])
+    data = main("H:/LOG00225.TXT", BMP085.BMP085_STANDARD) #"7th_flight.TXT", BMP085.BMP085_ULTRAHIGHRES) #
     # plt.plot(data.dataFrame["t_p"], data.dataFrame["p_r"])
     plt.plot(data.dataFrame["t_p"], data.dataFrame["h_p"])
-
     plt.plot(data.dataFrame["t_p"], data.dataFrame["h_a"])
-    # plt.plot(data.dataFrame["t_p"], data.dataFrame["a_h"])
     plt.plot(data.dataFrame["t_p"], data.dataFrame["h_f"])
+
+    # plt.plot(data.dataFrame["t_p"], data.dataFrame["vh_f"])
+
+    # plt.plot(data.dataFrame["t_p"], -data.dataFrame["ah_p"])
+    # plt.plot(data.dataFrame["t_p"], data.dataFrame["ax_f"])
+    # plt.plot(data.dataFrame["t_p"], data.dataFrame["ay_f"])
+    # plt.plot(data.dataFrame["t_p"], data.dataFrame["az_f"])
     plt.grid()
     # plt.xlim((120, 170))
     # plt.ylim((190, 380))
